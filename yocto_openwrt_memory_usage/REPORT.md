@@ -138,12 +138,11 @@ Each scenario is run twice inside the guest:
    (`mem_stacks_B`) at every snapshot. "Peak total" is the snapshot with the largest sum.
 2. both processes under `/usr/bin/time -v` (no instrumentation) for the maximum resident set size.
 
-Full command lines are in `meta-tlsram/recipes-tlsram/tls-ram-tests/files/tls-ram-test.sh`;
-raw outputs (`*.massif`, `*.time`, logs) are in `results/`.
+Full command lines are in `meta-tlsram/recipes-tlsram/tls-ram-tests/files/tls-ram-test.sh`.
 
 ## Results
 
-Measured inside the QEMU guest on 2026-10-02 (`results/SUMMARY.md`, raw files in `results/`).
+Measured inside the QEMU guest on 2026-10-02.
 All 12 connection runs and both baseline runs completed with exit status 0; every connection
 negotiated SECP256R1 and `TLS_AES_128_GCM_SHA256` (TLS 1.3) or
 `TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256` (TLS 1.2) with the server certificate verified.
@@ -275,11 +274,7 @@ source poky/oe-init-build-env build
 bitbake tls-ram-image qemu-helper-native
 cd .. && tools/run_qemu_tests.sh results        # boots QEMU, runs tls-ram-test over ssh, copies results
 tools/parse_results.py results --md             # summary table
-tools/compare_results.py results-published results   # peaks of a rerun vs the committed raw files (A.11)
 ```
-
-(`results-published` is a copy of the committed `results/` made before rerunning; the committed
-files are the first run, `results/REPRODUCTION.md` the comparison with the clean rebuild.)
 
 Inside the guest the test can also be run by hand: `tls-ram-test /root/results [scenario ...]`.
 
@@ -785,7 +780,7 @@ Then read `results/` as in A.6.
 
 | Path | Contents |
 |---|---|
-| `REPORT.md`, `REPORT.pdf` | this report |
+| `REPORT.md` | this report |
 | `meta-tlsram/` | the layer exactly as built (A.3) |
 | `setup.sh` | clones poky and meta-wolfssl at the pinned commits and writes `build/conf` (A.2, A.4) |
 | `tools/run_qemu_tests.sh` | boots the image, runs the test over ssh, copies results back (A.5) |
@@ -793,8 +788,6 @@ Then read `results/` as in A.6.
 | `tools/compare_results.py` | peak-by-peak comparison of two results directories, flags differences over 5 % (A.11) |
 | `tools/static_sizes.sh` | text/data/bss of the built libraries (A.8) |
 | `tools/md2pdf.py`, `tools/make_report_pdf.sh` | render `REPORT.md` to `REPORT.pdf` |
-| `results/` | every raw massif, time and log file behind the tables in this report, uncompressed |
-| `results/REPRODUCTION.md` | the clean-rebuild check of 2026-10-23 with the full comparison table (A.11) |
 
 Everything else (`poky/`, `meta-wolfssl/`, `build/`, `downloads/`, `sstate-cache/`) is generated
 and ignored by git.
@@ -818,9 +811,7 @@ Peak total, heap at peak and stack at peak were identical to the byte for all 14
 two figures that are not part of that comparison moved slightly: max RSS (page granularity, up to
 256 KiB between runs) and massif's max stack for one endpoint (7,848 B then 6,536 B; massif samples
 the stack only at allocation events, so the maximum over the whole run is less stable than the
-stack at the peak snapshot). The raw files of the second run differ from the committed ones only
-in process ids, timestamps and intermediate snapshots; they were not added to the repository
-(they would double its size). `results/REPRODUCTION.md` holds the full comparison table.
+stack at the peak snapshot).
 
 | Endpoint (scenario.role) | Peak total (B) | Heap at peak (B) | Stack at peak (B) | Max stack, run 1 / run 2 (B) | Max RSS, run 1 / run 2 (KiB) |
 |---|---|---|---|---|---|
@@ -841,11 +832,6 @@ in process ids, timestamps and intermediate snapshots; they were not added to th
 
 Peak total, heap and stack at peak are the same in both runs, so they are listed once. The
 baselines are stopped with SIGTERM under massif and have no GNU time record, hence no RSS.
-
-To repeat the check yourself: `cp -a results results-published` before running the measurement
-(so the committed first-run files are kept), rerun A.5 into `results`, then
-`tools/compare_results.py results-published results`. Exit status 0 means every peak total is
-within 5 % of the published one.
 
 ### A.12 Helper scripts
 
@@ -2066,6 +2052,8 @@ finally:
     q.terminate(); q.wait(); srv.shutdown(); print('SERVER-SIDE TLS LOG:',tlslog,'ctx ciphers/min:',ctx.minimum_version)
 ```
 
+Without KVM access, delete `"-enable-kvm",` from the `subprocess.Popen` line: the guest then runs under TCG, still boots within the 35 s wait, and the memory figures are unchanged.
+
 `c17.txt`, the low-RAM scenario (run on the low-RAM image, whose own backend is the wolfSSL one;
 it fetches only `memshim.so` and `c.pem`):
 
@@ -2283,8 +2271,7 @@ all three backends (B.8). The OpenSSL backend (`88dfe5ab`) and the low-RAM wolfS
 (`f209b8da` against `50de4a04`): it records the name of the wolfSSL library it was linked against,
 and that name contains a hash of the wolfSSL configuration (`libwolfssl.so.5.9.4.c88582f0` now,
 `.e624513f` in the reported build, because the option list that feeds the hash gained
-`WOLFSSL_LOW_RAM`); the behaviour is the same. The raw logs of this rerun are in
-`rerun-default-wolfssl-vs-openssl.txt` and `rerun-lowram-wolfssl.txt`.
+`WOLFSSL_LOW_RAM`); the behaviour is the same.
 
 Two things were found and fixed while doing this, and are why the script is as it is: the OpenSSL
 and wolfSSL backends must be taken from the `.apk` files, because the `build_dir` copies are
@@ -2305,9 +2292,5 @@ commands are the ones recorded in their `config.log`).
 | `openwrt-tls-ram/reproduce.sh`, `host-tools.sh` | B.6, B.3 |
 | `openwrt-tls-ram/wolfssl-lowram.patch`, `diffconfig-*.txt`, `feeds.conf` | B.2 |
 | `openwrt-tls-ram/memshim.c`, `vm2.py`, `ossl.cnf`, `c16.txt`, `c17.txt` | B.4, B.5 |
-| `openwrt-tls-ram/results-*.txt` | raw console logs of the reported runs |
-| `openwrt-tls-ram/rerun-*.txt` | raw console logs of the rerun in B.9 |
 | `src/` | the OpenWrt tree of the experiment (generated; `build_dir/`, `staging_dir/`, `dl/`, `bin/` are build output) |
-| `repro-check/work/` | `artifacts/` (images, backends, shim) and `test-*` directories of the rerun |
-| `backup-wolfssl-only/` | older configs and Makefiles, and earlier versions of this file |
 | `tools/` | locally built gawk, bison, flex, swig, pcre2 and their tarballs |
